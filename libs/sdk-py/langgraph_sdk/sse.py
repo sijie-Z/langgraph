@@ -124,6 +124,8 @@ class SSEDecoder:
         if fieldname == b"event":
             self._event = value.decode()
         elif fieldname == b"data":
+            if self._data:
+                self._data.extend(b"\n")
             self._data.extend(value)
         elif fieldname == b"id":
             if b"\0" in value:
