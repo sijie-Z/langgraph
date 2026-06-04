@@ -81,6 +81,12 @@ class AsyncPostgresSaver(BasePostgresSaver):
         async with await AsyncConnection.connect(
             conn_string, autocommit=True, prepare_threshold=0, row_factory=dict_row
         ) as conn:
+            # Register text dumper so empty strings are sent as text, not bytea.
+            # In binary mode psycopg3 infers bytea for empty strings, which
+            # breaks queries like `WHERE checkpoint_ns = %s` when the value is "".
+            from psycopg.types.string import StrBinaryDumper
+
+            conn.adapters.register_dumper(str, StrBinaryDumper)
             if pipeline:
                 async with conn.pipeline() as pipe:
                     yield cls(conn=conn, pipe=pipe, serde=serde)
