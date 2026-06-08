@@ -1160,7 +1160,7 @@ class PostgresStore(BaseStore, BasePostgresStore[_pg_internal.Conn]):
                                 )
                             params["index_type"] = it
                         sql = sql % params
-                    cur.execute(sql)
+                    cur.execute(_strip_concurrently(sql) if in_transaction else sql)
                     cur.execute("INSERT INTO vector_migrations (v) VALUES (%s)", (v,))
 
 

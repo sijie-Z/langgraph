@@ -291,7 +291,7 @@ class AsyncPostgresStore(AsyncBatchedBaseStore, BasePostgresStore[_ainternal.Con
                                 )
                             params["index_type"] = it
                         sql = sql % params
-                    await cur.execute(sql)
+                    await cur.execute(_strip_concurrently(sql) if in_transaction else sql)
                     await cur.execute(
                         "INSERT INTO vector_migrations (v) VALUES (%s)", (v,)
                     )
