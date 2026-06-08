@@ -839,6 +839,52 @@ def test_nonnull_migrations() -> None:
         assert statement.strip()
 
 
+def test_strip_concurrently() -> None:
+    from langgraph.checkpoint.postgres.base import _strip_concurrently
+
+    assert (
+        _strip_concurrently("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx ON t (c);")
+        == "CREATE INDEX IF NOT EXISTS idx ON t (c);"
+    )
+    assert (
+        _strip_concurrently("CREATE INDEX IF NOT EXISTS idx ON t (c);")
+        == "CREATE INDEX IF NOT EXISTS idx ON t (c);"
+    )
+    assert _strip_concurrently("SELECT 1;") == "SELECT 1;"
+
+
+def test_setup_in_transaction() -> None:
+    """setup() must succeed when called inside a transaction."""
+    database = f"test_{uuid4().hex[:16]}"
+    uri_parts = DEFAULT_URI.split("/")
+    uri_base = "/".join(uri_parts[:-1])
+    query_params = ""
+    if "?" in uri_parts[-1]:
+        _, query_params = uri_parts[-1].split("?", 1)
+        query_params = "?" + query_params
+    conn_string = f"{uri_base}/{database}{query_params}"
+
+    embeddings = CharacterEmbeddings(dims=16)
+    index_config = {
+        "dims": embeddings.dims,
+        "embed": embeddings,
+        "distance_type": "cosine",
+    }
+
+    with Connection.connect(DEFAULT_URI, autocommit=True) as conn:
+        conn.execute(f"CREATE DATABASE {database}")
+    try:
+        with Connection.connect(conn_string, autocommit=False) as conn:
+            store = PostgresStore(conn, index=index_config)
+            store.setup()
+            # If we get here without raising, the fix works.
+            # Covers both MIGRATIONS and VECTOR_MIGRATIONS paths.
+            conn.commit()
+    finally:
+        with Connection.connect(DEFAULT_URI, autocommit=True) as conn:
+            conn.execute(f"DROP DATABASE {database}")
+
+
 def test_store_ttl(store):
     # Assumes a TTL of 1 minute = 60 seconds
     ns = ("foo",)
